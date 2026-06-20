@@ -1,8 +1,17 @@
 import { tavily } from 'tavily';
 import Exa from 'exa-js';
 
-const tavilyClient = tavily({ apiKey: process.env.TAVILY_API_KEY });
-const exa = new Exa(process.env.EXA_API_KEY);
+let tavilyClient;
+function getTavilyClient() {
+  if (!tavilyClient) tavilyClient = tavily({ apiKey: process.env.TAVILY_API_KEY });
+  return tavilyClient;
+}
+
+let exa;
+function getExa() {
+  if (!exa) exa = new Exa(process.env.EXA_API_KEY);
+  return exa;
+}
 
 export async function searchCompanyIntel(company, role) {
   const queries = [
@@ -11,7 +20,7 @@ export async function searchCompanyIntel(company, role) {
     `${company} engineering blog values hiring culture`,
   ];
   const results = await Promise.all(
-    queries.map(q => tavilyClient.search(q, { searchDepth: 'basic', maxResults: 4, includeAnswer: true }))
+    queries.map(q => getTavilyClient().search(q, { searchDepth: 'basic', maxResults: 4, includeAnswer: true }))
   );
   return results
     .flatMap(r => r.results || [])
@@ -23,7 +32,7 @@ export async function searchCompanyIntel(company, role) {
 export async function searchQuizContext(company, role, jd) {
   const jdKeywords = jd.split(/\W+/).filter(w => w.length > 5).slice(0, 8).join(' ');
   const query = `${company} ${role} technical interview questions ${jdKeywords}`;
-  const result = await exa.search(query, {
+  const result = await getExa().search(query, {
     numResults: 6,
     useAutoprompt: true,
     type: 'neural',
