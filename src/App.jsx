@@ -1104,7 +1104,7 @@ function ResearchMode({ profile }) {
         system,
         messages: [{ role: "user", content: userMsg }],
         useSearch: true,
-        maxTokens: 4000,
+        maxTokens: 8000,
       });
       if (result.stopReason === "max_tokens") {
         throw new Error("Response was cut off before finishing. Try again.");

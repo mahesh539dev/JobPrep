@@ -15,3 +15,8 @@ create policy "anon full access"
   to anon
   using (true)
   with check (true);
+
+-- RLS policies only take effect once the role also has the underlying
+-- table-level grant — without this, PostgREST returns 42501 "permission
+-- denied" before RLS is even evaluated.
+grant select, insert, update, delete on public.interview_prep_kv to anon;
