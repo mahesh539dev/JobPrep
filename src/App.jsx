@@ -91,11 +91,11 @@ Bachelor of Computer Science | JNTUA College of Engineering (Autonomous), Pulive
 // or leave empty if frontend+backend are served from the same Railway service.
 const API_BASE = import.meta.env.VITE_API_BASE || "";
 
-async function callClaude({ system, messages, useSearch = false, maxTokens = 4000 }) {
+async function callClaude({ system, messages, useSearch = false, maxTokens = 4000, feature, company, role, jd }) {
   const res = await fetch(`${API_BASE}/api/generate`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ system, messages, useSearch, maxTokens }),
+    body: JSON.stringify({ system, messages, useSearch, maxTokens, feature, company, role, jd }),
   });
   if (!res.ok) {
     const errBody = await res.json().catch(() => ({}));
@@ -919,6 +919,10 @@ function QuizMode({ profile }) {
         messages: [{ role: "user", content: userMsg }],
         useSearch: true,
         maxTokens: 8000,
+        feature: "quiz",
+        company: profile.company,
+        role: profile.role,
+        jd: profile.jd,
       });
       if (result.stopReason === "max_tokens") {
         throw new Error("Response was cut off (hit token limit) before finishing. Try generating a smaller batch or try again.");
@@ -1105,6 +1109,9 @@ function ResearchMode({ profile }) {
         messages: [{ role: "user", content: userMsg }],
         useSearch: true,
         maxTokens: 8000,
+        feature: "company_intel",
+        company: profile.company,
+        role: profile.role,
       });
       if (result.stopReason === "max_tokens") {
         throw new Error("Response was cut off before finishing. Try again.");
@@ -1266,6 +1273,7 @@ For the very first message (no candidate answer yet to grade), skip the GRADE_JS
         system: interviewerSystem,
         messages: [{ role: "user", content: "Begin the interview." }],
         maxTokens: 600,
+        feature: "mock_score",
       });
       setTurns([{ role: "interviewer", text: result.text.trim() }]);
       setQuestionCount(1);
@@ -1293,6 +1301,7 @@ For the very first message (no candidate answer yet to grade), skip the GRADE_JS
         system: interviewerSystem,
         messages: apiMessages,
         maxTokens: 800,
+        feature: "mock_score",
       });
       const text = result.text;
 
@@ -1507,6 +1516,7 @@ function NotesMode({ profile }) {
         messages: [{ role: "user", content: userMsg }],
         useSearch: true,
         maxTokens: 12000,
+        feature: "notes",
       });
       if (result.stopReason === "max_tokens") {
         throw new Error("Response was cut off before finishing (notes are long). Try again — it occasionally needs a retry.");

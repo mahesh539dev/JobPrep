@@ -1,8 +1,9 @@
 import express from "express";
 import cors from "cors";
-import OpenAI from "openai";
 import path from "path";
 import { fileURLToPath } from "url";
+import { generate, scoreMockAnswer, MODELS } from "./server/llm.js";
+import { searchCompanyIntel, searchQuizContext } from "./server/search.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -17,52 +18,51 @@ if (!OPENAI_API_KEY) {
   console.error("FATAL: OPENAI_API_KEY environment variable is not set.");
 }
 
-const client = new OpenAI({ apiKey: OPENAI_API_KEY });
-
-// Maps "model" requests from the frontend to actual OpenAI models.
-// gpt-5.5 used as the default — change here if you want a different model/cost tradeoff.
-const DEFAULT_MODEL = "gpt-5.5";
-
 app.get("/api/health", (req, res) => {
   res.json({ ok: true, hasKey: !!OPENAI_API_KEY });
 });
 
 // Single endpoint the frontend calls for everything: quiz generation, research,
-// notes generation, and the mock interviewer. Mirrors the shape the frontend
-// previously used for Anthropic's /v1/messages so the App.jsx changes are minimal.
+// notes generation, and the mock interviewer. Routed by req.body.feature to the
+// appropriate model + search layer (see server/llm.js and server/search.js).
 app.post("/api/generate", async (req, res) => {
   try {
-    const { system, messages, useSearch, maxTokens } = req.body;
+    const { system, messages, maxTokens, feature, company, role, jd } = req.body;
 
     if (!Array.isArray(messages) || messages.length === 0) {
       return res.status(400).json({ error: "messages array is required" });
     }
 
-    // Responses API takes a single "input" — flatten system + conversation history
-    // into one input string/array. We build a simple transcript format.
-    const inputParts = [];
-    if (system) {
-      inputParts.push({ role: "system", content: system });
+    const lastUserMsg = messages[messages.length - 1]?.content || "";
+    const options = { maxTokens: maxTokens || 4000 };
+
+    let text;
+    switch (feature) {
+      case "company_intel": {
+        const context = await searchCompanyIntel(company, role);
+        const userPrompt = `${lastUserMsg}\n\nResearch context from web search:\n${context}`;
+        text = await generate(MODELS.companyBrief, system, userPrompt, options);
+        break;
+      }
+      case "quiz": {
+        const context = await searchQuizContext(company, role, jd);
+        const userPrompt = `${lastUserMsg}\n\nResearch context from web search:\n${context}`;
+        text = await generate(MODELS.quiz, system, userPrompt, options);
+        break;
+      }
+      case "notes": {
+        text = await generate(MODELS.notes, system, lastUserMsg, options);
+        break;
+      }
+      case "mock_score": {
+        text = await scoreMockAnswer(system, messages);
+        break;
+      }
+      default:
+        return res.status(400).json({ error: `Unknown feature: ${feature}` });
     }
-    for (const m of messages) {
-      inputParts.push({ role: m.role === "assistant" ? "assistant" : "user", content: m.content });
-    }
 
-    const requestBody = {
-      model: DEFAULT_MODEL,
-      input: inputParts,
-      max_output_tokens: Math.min(Math.max(maxTokens || 4000, 16), 32000),
-    };
-    if (useSearch) {
-      requestBody.tools = [{ type: "web_search" }];
-    }
-
-    const response = await client.responses.create(requestBody);
-
-    const text = response.output_text || "";
-    const stopReason = response.status === "incomplete" ? "max_tokens" : "complete";
-
-    res.json({ text, stopReason });
+    res.json({ text, stopReason: "complete" });
   } catch (err) {
     console.error("generate error:", err);
     res.status(500).json({ error: err.message || "Generation failed" });
